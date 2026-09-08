@@ -3195,19 +3195,25 @@
     return out;
   }
   function testimoniJenisAcaraLabel(u){
+    // PENTING: label ini WAJIB mencerminkan asal_form yang sebenarnya (bukan
+    // menebak/menyamar sebagai halaman tempat testimoni ini ditampilkan), supaya
+    // kalau suatu saat ada testimoni yang salah dipublikasikan ke halaman ini,
+    // Anda bisa langsung melihat dari label-nya bahwa asalnya bukan dari sini.
     var asal = (u.asal_form || '').toLowerCase();
-    if(asal === 'biodata'){
-      return u.jenis_acara || 'Acara';
-    }
-    if(asal === 'wedding'){
-      return u.jenis_acara || 'Wedding / Patuaekkon';
-    }
     var MAP = {
-      mangayun: 'Mangayun / Aqiqah',
-      margondang: 'Margondang',
-      prewedding: 'Prewedding'
+      wedding:           'Wedding / Patuaekkon',
+      prewedding:        'Prewedding',
+      margondang:        'Margondang',
+      mangayun:          'Mangayun / Aqiqah',
+      wisuda:            'Wisuda',
+      undangan_digital:  'Undangan Digital',
+      biodata:           'Isi Biodata'
     };
-    return MAP[asal] || 'Margondang';
+    if(asal === 'wedding' || asal === 'biodata'){
+      return u.jenis_acara || MAP[asal];
+    }
+    if(MAP[asal]) return MAP[asal];
+    return asal ? ('Tidak dikenal (' + asal + ')') : 'Asal tidak diketahui';
   }
   function renderTestimoniList(list){
     var wrap = document.getElementById('testimoniListWrap');
