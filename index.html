@@ -3240,7 +3240,6 @@
     reviewSupabaseClient
       .from(ULASAN_TABLE)
       .select('*')
-      .eq('dipublikasikan', true)
       .order('created_at', { ascending:false })
       .then(function(res){
         if(res && res.error){
@@ -3248,7 +3247,16 @@
           if(wrap) wrap.innerHTML = '<div class="testimoni-empty">Testimoni belum bisa dimuat saat ini.</div>';
           return;
         }
-        renderTestimoniList(res.data || []);
+        // Tampilkan hanya ulasan yang ditargetkan ke "margondang" di panel Kelola Publikasi.
+        // publish_targets adalah sumber kebenaran; dipublikasikan (boolean lama) hanya
+        // dipertahankan untuk kompatibilitas pricelist Wedding, jadi tidak dipakai di sini.
+        var filtered = (res.data || []).filter(function(u){
+          var targets = Array.isArray(u.publish_targets)
+            ? u.publish_targets
+            : (u.dipublikasikan ? ['wedding'] : []); // fallback baris lama sebelum publish_targets ada
+          return targets.indexOf('margondang') !== -1;
+        });
+        renderTestimoniList(filtered);
       })
       .catch(function(err){
         console.error('Gagal memuat testimoni', err);
