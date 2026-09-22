@@ -1933,13 +1933,13 @@
 
       <p class="form-error" id="formError">Mohon lengkapi semua kolom bertanda (*) terlebih dahulu.</p>
 
-      <button type="button" class="download-summary-btn" id="downloadSummaryBtn" onclick="handleDownloadSummary()" disabled>
+      <button type="button" class="download-summary-btn" id="downloadSummaryBtn" onclick="handleDownloadSummary()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v12m0 0l-5-5m5 5l5-5M4 20h16"/></svg>
         Download Gambar Detail Data
       </button>
       <p class="form-note" id="downloadSummaryStatus">Lengkapi semua kolom bertanda (*) agar tombol unduh &amp; kirim ke WhatsApp aktif.</p>
 
-      <button type="submit" class="modal-submit" id="bookingSubmitBtn" disabled>
+      <button type="submit" class="modal-submit" id="bookingSubmitBtn">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.33 4.97L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm5.8 14.1c-.24.68-1.4 1.3-1.93 1.38-.5.08-1.12.11-1.81-.11a16.6 16.6 0 0 1-1.62-.6c-2.86-1.24-4.72-4.13-4.86-4.32-.14-.19-1.16-1.54-1.16-2.94 0-1.4.73-2.09.99-2.37.26-.28.57-.35.76-.35h.55c.18 0 .42-.02.65.5.24.55.82 1.9.89 2.04.07.14.12.31.02.5-.09.18-.14.3-.28.46-.14.16-.29.35-.42.47-.14.14-.28.29-.12.56.16.28.72 1.19 1.55 1.93 1.06.95 1.96 1.24 2.24 1.38.28.14.44.12.6-.07.16-.19.68-.79.86-1.06.18-.28.36-.23.6-.14.24.09 1.53.72 1.79.85.26.14.44.2.5.32.06.12.06.68-.18 1.36Z"/></svg>
         Kirim Data ke WhatsApp
       </button>
@@ -3065,21 +3065,27 @@
     return missing;
   }
 
-  // Satu-satunya tempat yang mengatur status aktif/nonaktif kedua tombol:
-  // aktif hanya kalau semua kolom wajib lengkap, DP tidak melebihi total,
-  // dan tombol itu sendiri tidak sedang memproses.
+  // Satu-satunya tempat yang mengatur status aktif/nonaktif kedua tombol.
+  // PENTING: tombol TIDAK PERNAH dimatikan karena data belum lengkap —
+  // hanya dimatikan sementara saat sedang memproses (downloadBusy/
+  // submitBusy), supaya klik dobel tidak memicu pengiriman dobel. Kalau
+  // klien menekan tombol saat data belum lengkap, handleDownloadSummary()
+  // dan submit handler di bawah memanggil form.reportValidity(), yang
+  // otomatis menggulir & fokus ke kolom wajib pertama yang masih kosong
+  // (perilaku bawaan browser) — jadi klien tetap diarahkan ke kolom yang
+  // perlu diisi, tanpa tombolnya sendiri harus dimatikan lebih dulu.
   function refreshActionButtons(){
     var dlBtn = document.getElementById('downloadSummaryBtn');
     var subBtn = document.getElementById('bookingSubmitBtn');
     var status = document.getElementById('downloadSummaryStatus');
     if(!dlBtn || !subBtn){ return; }
 
+    dlBtn.disabled = downloadBusy;
+    subBtn.disabled = submitBusy;
+
     var missing = getMissingRequiredFields();
     var dpOk = isDpValid();
     var complete = missing.length === 0 && dpOk;
-
-    dlBtn.disabled = !complete || downloadBusy;
-    subBtn.disabled = !complete || submitBusy;
 
     var hintKey = complete ? 'ok' : (missing.join('|') + (dpOk ? '' : '|dp'));
     if(hintKey !== lastHintKey){
@@ -3088,7 +3094,7 @@
         status.textContent = 'Data sudah lengkap. Anda bisa mengunduh gambar detail data atau langsung mengirim ke WhatsApp.';
         status.className = 'form-note status-ok';
       } else if(missing.length){
-        status.textContent = 'Belum lengkap: ' + missing.join(', ') + '.';
+        status.textContent = 'Belum lengkap: ' + missing.join(', ') + '. Kolom yang kosong akan ditandai otomatis saat salah satu tombol ditekan.';
         status.className = 'form-note';
       } else {
         status.textContent = 'DP tidak boleh lebih besar dari Total Biaya. Perbaiki dulu nominal DP-nya.';
@@ -3409,11 +3415,14 @@
     const submitBtn = document.getElementById('bookingSubmitBtn');
     if(submitBtn.disabled){ return; }
 
+    const form = document.getElementById('bookingForm');
     validatePhoneField();
+    if(!form.reportValidity()){ return; }
     if(!isDpValid()){
       const dpStatus2 = document.getElementById('downloadSummaryStatus');
       dpStatus2.textContent = 'DP tidak boleh lebih besar dari Total Biaya. Perbaiki dulu nominal DP-nya.';
       dpStatus2.className = 'form-note status-error';
+      document.getElementById('f_dp').focus();
       return;
     }
 
