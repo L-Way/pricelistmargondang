@@ -649,7 +649,8 @@
     font-size:14px;
     user-select:none;
   }
-  .field .input-prefix-group input[type="text"]{
+  .field .input-prefix-group input[type="text"],
+  .field .input-prefix-group input[type="tel"]{
     flex:1;
     min-width:0;
     width:auto;
@@ -658,7 +659,8 @@
     border-radius:0;
     padding:11px 13px;
   }
-  .field .input-prefix-group input[type="text"]:focus{ border-color:transparent; }
+  .field .input-prefix-group input[type="text"]:focus,
+  .field .input-prefix-group input[type="tel"]:focus{ border-color:transparent; }
   .maps-row{ display:flex; gap:8px; margin-top:8px; flex-wrap:nowrap; }
   .maps-row .btn-locate{ flex:1; justify-content:center; min-width:0; padding-left:10px; padding-right:10px; }
 
@@ -1710,7 +1712,10 @@
 
       <div class="field">
         <label for="f_wa">No. WhatsApp<span class="req-mark">*</span></label>
-        <input type="tel" id="f_wa" placeholder="08xxxxxxxxxx" required onblur="trimOnBlur(this)">
+        <div class="input-prefix-group">
+          <span class="input-prefix">+62</span>
+          <input type="tel" id="f_wa" inputmode="numeric" autocomplete="tel-national" pattern="^8[0-9]{8,11}$" placeholder="812xxxxxxxx" title="Isi nomor tanpa 0 di depan, contoh: 812xxxxxxxx" required>
+        </div>
       </div>
 
       <div class="field">
@@ -1846,7 +1851,7 @@
         <label for="f_ig_wanita">Instagram Pengantin Wanita</label>
         <div class="input-prefix-group">
           <span class="input-prefix">@</span>
-          <input type="text" id="f_ig_wanita" placeholder="namapengguna" oninput="this.value = sanitizeHandleInput(this.value);">
+          <input type="text" id="f_ig_wanita" placeholder="namapengguna">
         </div>
       </div>
 
@@ -1854,7 +1859,7 @@
         <label for="f_ig_pria">Instagram Pengantin Pria</label>
         <div class="input-prefix-group">
           <span class="input-prefix">@</span>
-          <input type="text" id="f_ig_pria" placeholder="namapengguna" oninput="this.value = sanitizeHandleInput(this.value);">
+          <input type="text" id="f_ig_pria" placeholder="namapengguna">
         </div>
       </div>
 
@@ -1916,7 +1921,7 @@
       <div class="field">
         <label for="f_voucher">Kode Voucher (Opsional)</label>
         <div class="voucher-row">
-          <input type="text" id="f_voucher" placeholder="Masukkan kode voucher" style="text-transform:uppercase;" oninput="this.value = this.value.toUpperCase().replace(/\s+/g, '');" onkeydown="if(event.key==='Enter'){ event.preventDefault(); applyVoucher(); }">
+          <input type="text" id="f_voucher" placeholder="Masukkan kode voucher" onkeydown="if(event.key==='Enter'){ event.preventDefault(); applyVoucher(); }">
           <button type="button" class="btn-locate" id="applyVoucherBtn" onclick="applyVoucher()">Terapkan</button>
         </div>
         <p class="locate-status" id="voucherStatus"></p>
@@ -2112,7 +2117,7 @@
   // customer selesai mengisi kolom (blur), supaya tidak mengganggu saat
   // sedang mengetik. Batas kata dianggap di spasi, "-", "/", atau baris baru.
   function toTitleCase(str){
-    return str.toLowerCase().replace(/(^|[\s\-\/])([a-z])/g, function(match, sep, chr){
+    return String(str || '').replace(/(^|\s)([a-z])/g, function(match, sep, chr){
       return sep + chr.toUpperCase();
     });
   }
@@ -2415,31 +2420,95 @@
   })();
 
   // type="tel" TIDAK memvalidasi apa pun secara otomatis — customer bisa
-  // mengetik huruf/simbol apa saja dan form tetap lolos `required`. Fungsi
-  // ini menormalkan input (buang spasi/strip/kurung) lalu mengecek formatnya
-  // terhadap pola nomor HP Indonesia, memakai setCustomValidity() supaya
-  // reportValidity() ikut menolaknya kalau salah format.
-  var PHONE_PATTERN = /^(\+62|62|0)8[0-9]{8,12}$/;
-  function normalizePhone(raw){
-    return String(raw || '').trim().replace(/[\s\-().]/g, '');
+  // mengetik huruf/simbol apa saja dan form tetap lolos `required`. Kolom
+  // ini hanya berisi nomor nasional (mulai dari 8, tanpa 0/62/+62 di
+  // depan karena "+62" sudah tampil permanen sebagai kotak kiri kolom).
+  // toNationalPhone() membuang otomatis kalau klien terlanjur mengetik/
+  // menempel 0812..., 62812..., atau +62812...
+  function toNationalPhone(v){
+    var d = String(v || '').replace(/\D/g, '');
+    if(d.indexOf('62') === 0) d = d.slice(2);
+    d = d.replace(/^0+/, '');
+    return d.slice(0, 12);
+  }
+  function normalizePhone(v){
+    return toNationalPhone(v);
+  }
+  function isValidPhone(v){
+    return /^8[0-9]{8,11}$/.test(toNationalPhone(v));
   }
   function validatePhoneField(){
     var phoneInput = document.getElementById('f_wa');
     if(!phoneInput){ return; }
-    var normalized = normalizePhone(phoneInput.value);
+    var normalized = toNationalPhone(phoneInput.value);
     if(!normalized){
       phoneInput.setCustomValidity('Nomor WhatsApp wajib diisi.');
-    } else if(!PHONE_PATTERN.test(normalized)){
-      phoneInput.setCustomValidity('Format nomor WhatsApp tidak valid. Contoh: 0812xxxxxxx atau +62812xxxxxxx.');
+    } else if(!isValidPhone(normalized)){
+      phoneInput.setCustomValidity('Format nomor WhatsApp tidak valid. Contoh: 812xxxxxxxx (tanpa 0 di depan).');
     } else {
       phoneInput.setCustomValidity('');
     }
   }
+  // Menjaga posisi kursor relatif dari akhir teks — dipakai untuk kolom
+  // yang bisa membuang banyak karakter sekaligus (No. WhatsApp & Instagram),
+  // supaya kursor tidak lompat ke ujung tiap kali huruf/simbol tak valid dibuang.
+  function keepCursorFromEnd(el, updateFn){
+    var posFromEnd = el.value.length - (el.selectionStart == null ? el.value.length : el.selectionStart);
+    updateFn();
+    var pos = Math.max(el.value.length - posFromEnd, 0);
+    try{ el.setSelectionRange(pos, pos); }catch(e){ /* beberapa tipe input tidak mendukung ini */ }
+  }
   var fWaEl = document.getElementById('f_wa');
   if(fWaEl){
-    fWaEl.addEventListener('input', validatePhoneField);
+    fWaEl.addEventListener('input', function(){
+      keepCursorFromEnd(fWaEl, function(){ fWaEl.value = toNationalPhone(fWaEl.value); });
+      validatePhoneField();
+    });
     fWaEl.addEventListener('blur', validatePhoneField);
   }
+
+  // ---------- Auto-kapital LIVE (Nama, Nama Mempelai, Alamat) ----------
+  // Huruf pertama tiap kata dinaikkan jadi kapital begitu diketik; huruf
+  // lain yang sudah diketik pengguna TIDAK diubah/dipaksa jadi kecil.
+  // formatNameOnBlur() (dipanggil lewat atribut onblur di HTML) tetap
+  // jalan sebagai jaring pengaman terakhir saat pindah kolom.
+  ['f_nama','f_mempelai','f_alamat'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input', function(){
+      var next = toTitleCase(el.value);
+      if(next === el.value) return;
+      var start = el.selectionStart, end = el.selectionEnd;
+      el.value = next;
+      try{ el.setSelectionRange(start, end); }catch(e){ /* abaikan */ }
+    });
+  });
+
+  // ---------- Voucher LIVE (huruf besar semua, semua spasi dibuang) ----------
+  // Dipindah dari atribut inline oninput ke sini supaya posisi kursor bisa
+  // dijaga (tidak lompat ke ujung tiap kali diketik di tengah kode).
+  var fVoucherEl = document.getElementById('f_voucher');
+  if(fVoucherEl){
+    fVoucherEl.addEventListener('input', function(){
+      var next = fVoucherEl.value.replace(/\s+/g, '').toUpperCase();
+      if(next === fVoucherEl.value) return;
+      var start = fVoucherEl.selectionStart, end = fVoucherEl.selectionEnd;
+      fVoucherEl.value = next;
+      try{ fVoucherEl.setSelectionRange(start, end); }catch(e){ /* abaikan */ }
+    });
+  }
+
+  // ---------- Instagram: tambahkan penjagaan posisi kursor ----------
+  // sanitizeHandleInput() sendiri sudah dipanggil lewat atribut oninput di
+  // HTML; listener ini menambahkan keepCursorFromEnd supaya kursor tidak
+  // lompat ke ujung tiap kali "@"/spasi yang diketik di tengah dibuang.
+  ['f_ig_wanita','f_ig_pria'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input', function(){
+      keepCursorFromEnd(el, function(){ el.value = sanitizeHandleInput(el.value); });
+    }, true);
+  });
 
   // DP tidak boleh melebihi Total — kalau dibiarkan, "Sisa Pembayaran" jadi
   // negatif. Tampilan formatRupiah() membulatkannya ke Rp0 sehingga
@@ -2699,9 +2768,9 @@
     var waEl = document.getElementById('lk_wa');
     var btn = document.getElementById('lk_searchBtn');
     var key = keyEl.value.trim();
-    var normalized = normalizePhone(waEl.value);
+    var normalized = toNationalPhone(waEl.value);
 
-    if(!PHONE_PATTERN.test(normalized)){
+    if(!isValidPhone(normalized)){
       setLookupStatus('Format nomor WhatsApp tidak valid. Contoh: 0812xxxxxxx atau +62812xxxxxxx.', 'error');
       waEl.focus();
       return;
@@ -3297,7 +3366,7 @@
     const errorEl = document.getElementById('formError');
 
     const nama = document.getElementById('f_nama').value.trim();
-    const wa = normalizePhone(document.getElementById('f_wa').value);
+    const wa = '+62 ' + toNationalPhone(document.getElementById('f_wa').value);
     const paket = document.getElementById('f_paket').value;
     const hari = getHariValue();
     const hariLabel = HARI_LABELS[hari] || (hari + ' Hari');
