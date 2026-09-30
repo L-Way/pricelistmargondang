@@ -2018,7 +2018,7 @@
 
       <div class="field">
         <label for="f_vendor">Instagram Semua Vendor</label>
-        <textarea id="f_vendor" placeholder="MUA, katering, dekorasi, dll." onblur="trimOnBlur(this)"></textarea>
+        <textarea id="f_vendor" placeholder="Contoh: MUA @..., Dekorasi @..., WO @..." onblur="this.value = tidyVendorHandles(this.value)"></textarea>
       </div>
 
       <div class="field">
@@ -2028,7 +2028,7 @@
 
       <div class="field">
         <label for="f_dp">DP</label>
-        <input type="number" id="f_dp" placeholder="Contoh: 500000" min="0" onchange="updateSummary()" oninput="updateSummary()">
+        <div class="input-prefix-group"><span class="input-prefix">Rp</span><input type="text" id="f_dp" inputmode="numeric" autocomplete="off" placeholder="Contoh: 500.000" maxlength="14" onchange="updateSummary()" oninput="formatMoneyInputLive(this); updateSummary()"></div>
         <p id="dpErrorMsg" class="form-note status-error" hidden>DP tidak boleh lebih besar dari Total Biaya.</p>
       </div>
 
@@ -2518,9 +2518,67 @@
     updateSummary();
   }
 
+  // ---------- Helper format kolom: ribuan (titik), nomor 08xx, Instagram (@) ----------
+  // Pemisah ribuan ditulis MANUAL (bukan toLocaleString('id-ID')) supaya hasilnya
+  // SELALU titik di browser/HP mana pun, termasuk yang tidak punya data locale Indonesia.
+  function formatThousands(n){
+    n = Math.round(Number(n) || 0);
+    var neg = n < 0;
+    var s = String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return (neg ? '-' : '') + s;
+  }
+  // "1.350.000" / "Rp 1.350.000" -> 1350000 (semua non-angka dibuang).
+  function parseMoneyDigits(v){
+    var d = String(v == null ? '' : v).replace(/\D/g, '');
+    return d ? parseInt(d, 10) : 0;
+  }
+  // Kolom nominal (mis. DP): titik ribuan muncul LIVE saat diketik/ditempel,
+  // dan kursor dijaga tetap di posisi angka yang sama.
+  function formatMoneyInputLive(el){
+    var raw = el.value;
+    var caret = (el.selectionStart == null) ? raw.length : el.selectionStart;
+    var digitsBefore = raw.slice(0, caret).replace(/\D/g, '').length;
+    var digits = raw.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 11);
+    var formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    if(formatted === raw){ return; }
+    el.value = formatted;
+    if(digitsBefore > digits.length){ digitsBefore = digits.length; }
+    var pos = 0, seen = 0;
+    while(pos < formatted.length && seen < digitsBefore){
+      if(/\d/.test(formatted.charAt(pos))){ seen++; }
+      pos++;
+    }
+    try{ el.setSelectionRange(pos, pos); }catch(e){ /* abaikan */ }
+  }
+  // Nomor WhatsApp untuk DISIMPAN/DIKIRIM: selalu 08xxxxxxxxxx
+  // (0812..., +62812..., 62812..., 812... semuanya jadi 0812...).
+  function toLocalPhone(v){
+    var d = String(v || '').replace(/\D/g, '');
+    if(d.indexOf('62') === 0){ d = d.slice(2); }
+    d = d.replace(/^0+/, '').slice(0, 12);
+    return d ? ('0' + d) : '';
+  }
+  // Username Instagram untuk DISIMPAN/DIKIRIM: selalu diawali satu "@" (kosong tetap kosong).
+  function withAtHandle(v){
+    v = String(v || '').trim();
+    if(!v || v === '-'){ return ''; }
+    var m = v.match(/instagram\.com\/([^\/?#\s]+)/i);
+    if(m){ v = m[1]; }
+    v = v.replace(/[^A-Za-z0-9._]/g, '').toLowerCase().slice(0, 30);
+    return v ? ('@' + v) : '';
+  }
+  // Kolom "Instagram Semua Vendor" (teks bebas, boleh ada nama peran seperti
+  // "MUA @rina"): link profil diubah jadi @username dan "@@" dirapikan jadi "@".
+  function tidyVendorHandles(v){
+    return String(v || '')
+      .replace(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)\/?(?:\?[^\s,]*)?/gi, '@$1')
+      .replace(/@{2,}/g, '@')
+      .trim();
+  }
+
   function formatRupiah(num){
     if (isNaN(num)) num = 0;
-    return "Rp" + Math.round(num).toLocaleString('id-ID');
+    return "Rp" + formatThousands(num);
   }
 
   function openBookingModal(){
@@ -2675,9 +2733,28 @@
      bersifat readonly — hanya bisa diisi lewat tombol.
   ========================================================= */
   var KAONE_STUDIO = { lat: 1.458339846942726, lng: 99.64431716036893 };
+  // Tarif ongkos antar TIDAK lagi tetap di sini — nilainya diambil live dari
+  // Rekap Job Kaone Motret (menu Pengaturan > Ongkos Antar Foto), supaya admin
+  // cukup mengubah tarifnya SEKALI di sana dan otomatis berlaku di keempat
+  // halaman pricelist + Isi Biodata. Dua angka di bawah ini HANYA dipakai
+  // sebagai cadangan kalau pengambilan data dari cloud gagal (mis. sedang
+  // offline) — nilainya sengaja disamakan dengan bawaan Rekap Job.
   var ONGKIR_PER_KM = 3000;
-  var ONGKIR_BATAS_GRATIS = 20000;
-  var ONGKIR_PEMBULATAN = 1000;
+  var ONGKIR_BATAS_GRATIS = 19999;
+  (function fetchOngkirAntarPublic(){
+    var url = 'https://gyleppavsgbtrlgbyztv.supabase.co/rest/v1/kaone_motret_pengaturan_publik'
+      + '?kunci=eq.ongkir_antar&select=nilai&limit=1';
+    var anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5bGVwcGF2c2didHJsZ2J5enR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NjU0MDQsImV4cCI6MjEwMzM0MTQwNH0.0t7bMoTjgd-c48O37wo1QyGFsFnjrRiAkDzH8VMgw-Q';
+    fetch(url, { headers: { apikey: anonKey, Authorization: 'Bearer ' + anonKey } })
+      .then(function(res){ return res.ok ? res.json() : null; })
+      .then(function(rows){
+        var nilai = rows && rows[0] && rows[0].nilai;
+        if(!nilai) return;
+        if(isFinite(Number(nilai.perKm))) ONGKIR_PER_KM = Number(nilai.perKm);
+        if(isFinite(Number(nilai.batasGratis))) ONGKIR_BATAS_GRATIS = Number(nilai.batasGratis);
+      })
+      .catch(function(){ /* offline / tabel belum dibuat — pakai nilai cadangan di atas */ });
+  })();
   var roadDistCache = {};
 
   function fetchWithTimeout(url, ms){
@@ -2755,9 +2832,8 @@
   function hitungOngkir(km){
     if(km == null || !isFinite(km)) return null;
     var mentah = km * ONGKIR_PER_KM;
-    if(mentah < ONGKIR_BATAS_GRATIS) return 0;
-    var bulat = ONGKIR_PEMBULATAN || 1;
-    return Math.ceil(mentah / bulat) * bulat;
+    var dibulatkan = Math.ceil(mentah / 1000) * 1000;
+    return dibulatkan <= ONGKIR_BATAS_GRATIS ? 0 : dibulatkan;
   }
 
   var currentMapsKm = null;
@@ -2931,8 +3007,8 @@
       info.appendChild(mdEl('div', 'md-label', 'Ongkos Kirim Hasil Cetak'));
       info.appendChild(mdEl('div', 'md-value', ongkir > 0 ? formatRupiah(ongkir) : 'Gratis'));
       info.appendChild(mdEl('div', 'md-note', ongkir > 0
-        ? ('± ' + formatKm(currentMapsKm) + ' dari studio • Rp ' + ONGKIR_PER_KM.toLocaleString('id-ID') + '/km')
-        : ('± ' + formatKm(currentMapsKm) + ' dari studio • di bawah Rp ' + ONGKIR_BATAS_GRATIS.toLocaleString('id-ID') + ', jadi gratis')));
+        ? ('± ' + formatKm(currentMapsKm) + ' dari studio • Rp ' + formatThousands(ONGKIR_PER_KM) + '/km')
+        : ('± ' + formatKm(currentMapsKm) + ' dari studio • di bawah Rp ' + formatThousands(ONGKIR_BATAS_GRATIS) + ', jadi gratis')));
       head.appendChild(info);
       box.appendChild(head);
       box.hidden = false;
@@ -3145,7 +3221,7 @@
 
       switch(true){
         case key === 'nama': data.nama = value; break;
-        case key === 'no. whatsapp': data.wa = value; break;
+        case key === 'no. whatsapp': data.wa = toLocalPhone(value) || value; break;
         case key === 'paket':
           var mp = value.match(/^(.*?)\s*\(Rp([\d.]+)\)\s*$/);
           if(mp){ data.paket = mp[1].trim(); data.paketPrice = parseRupiah(mp[2]); }
@@ -3159,8 +3235,8 @@
         case key === 'add-on': data.addonText = value; break;
         case key === 'pemilihan foto': data.pilihanFoto = value; break;
         case key === 'nama kedua mempelai': data.mempelai = value; break;
-        case key === 'ig pengantin wanita': data.igWanita = value; break;
-        case key === 'ig pengantin pria': data.igPria = value; break;
+        case key === 'ig pengantin wanita': data.igWanita = withAtHandle(value); break;
+        case key === 'ig pengantin pria': data.igPria = withAtHandle(value); break;
         case key === 'tanggal acara': data.tanggalFmt = value; break;
         case key === 'waktu':
           var wparts = value.split('–');
@@ -3291,7 +3367,7 @@
 
     return {
       nama: get('Nama'),
-      wa: get('No. WhatsApp'),
+      wa: toLocalPhone(get('No. WhatsApp')) || get('No. WhatsApp'),
       paket: paket,
       paketPrice: num('Harga Paket') || PACKAGE_PRICES[paket] || 0,
       hari: hari,
@@ -3299,8 +3375,8 @@
       addonText: get('Add-On') || '-',
       pilihanFoto: get('Pemilihan Foto'),
       mempelai: get('Nama Mempelai'),
-      igWanita: get('IG Pengantin Wanita'),
-      igPria: get('IG Pengantin Pria'),
+      igWanita: withAtHandle(get('IG Pengantin Wanita')),
+      igPria: withAtHandle(get('IG Pengantin Pria')),
       tanggalFmt: get('Tanggal Acara') || '-',
       mulai: mulai,
       selesai: selesai,
@@ -3483,7 +3559,7 @@
     const hariAdjusted = computeHariAdjustedTotal(subtotal, getHariValue());
     const discount = calcVoucherDiscount(hariAdjusted, currentVoucher);
     const total = hariAdjusted - discount;
-    const dp = parseInt(document.getElementById('f_dp').value, 10) || 0;
+    const dp = parseMoneyDigits(document.getElementById('f_dp').value);
     return dp <= total;
   }
 
@@ -3531,7 +3607,7 @@
     const hariAdjusted = computeHariAdjustedTotal(subtotal, hari);
     const discount = calcVoucherDiscount(hariAdjusted, currentVoucher);
     const total = hariAdjusted - discount;
-    const dp = parseInt(document.getElementById('f_dp').value, 10) || 0;
+    const dp = parseMoneyDigits(document.getElementById('f_dp').value);
     const sisa = total - dp;
     const dpValid = dp <= total;
 
@@ -3964,7 +4040,7 @@
     const errorEl = document.getElementById('formError');
 
     const nama = document.getElementById('f_nama').value.trim();
-    const wa = '+62 ' + toNationalPhone(document.getElementById('f_wa').value);
+    const wa = toLocalPhone(document.getElementById('f_wa').value);
     const paket = document.getElementById('f_paket').value;
     const hari = getHariValue();
     const hariLabel = HARI_LABELS[hari] || (hari + ' Hari');
@@ -3985,7 +4061,7 @@
     const pengambilanEl = document.querySelector('input[name="f_pengambilan"]:checked');
     const pengambilan = pengambilanEl ? pengambilanEl.value : '-';
     const ongkir = parseInt(document.getElementById('f_ongkir').value, 10) || 0;
-    const vendor = document.getElementById('f_vendor').value.trim();
+    const vendor = tidyVendorHandles(document.getElementById('f_vendor').value);
     const catatan = document.getElementById('f_catatan').value.trim();
     const dpRaw = document.getElementById('f_dp').value;
 
@@ -4002,7 +4078,7 @@
     const hariAdjustedTotal = computeHariAdjustedTotal(subtotal, hari);
     const discount = calcVoucherDiscount(hariAdjustedTotal, currentVoucher);
     const total = hariAdjustedTotal - discount;
-    const dp = parseInt(dpRaw, 10) || 0;
+    const dp = parseMoneyDigits(dpRaw);
     const sisa = total - dp < 0 ? 0 : total - dp;
 
     const addonText = addons.length ? addons.map(function(a){ return (a.qty > 1 ? (a.name + ' x' + a.qty) : a.name) + ' (' + formatRupiah(a.lineTotal) + ')'; }).join(', ') : '-';
