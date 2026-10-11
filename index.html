@@ -691,6 +691,7 @@
   .three-col{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
   @media (max-width:640px){ .three-col{ grid-template-columns:1fr; } }
   .sub-label{ font-size:11.5px; color:var(--muted); margin-bottom:4px; display:block; }
+  .three-col .col-full{ grid-column:1 / -1; }
 
   /* ---------- Jarak ke Kaone Studio (di bawah kolom Maps) ---------- */
   .maps-distance{
@@ -1972,8 +1973,12 @@
             <label for="f_alamat_kab" class="sub-label">Kabupaten</label>
             <input type="text" id="f_alamat_kab" required>
           </div>
+          <div class="col-full">
+            <label for="f_alamat_prov" class="sub-label">Provinsi</label>
+            <input type="text" id="f_alamat_prov" placeholder="Contoh: Sumatera Utara" required>
+          </div>
         </div>
-        <p class="field-hint">Akan otomatis dirangkai menjadi, contoh: Aek Haruaya, Kec. Portibi, Kab. Padang Lawas Utara</p>
+        <p class="field-hint">Akan otomatis dirangkai menjadi, contoh: Aek Haruaya, Kec. Portibi, Kab. Padang Lawas Utara, Prov. Sumatera Utara</p>
       </div>
 
       <div class="field">
@@ -2677,7 +2682,7 @@
   // diketik; kata yang masih sedang diketik tidak "dilawan" turun meski
   // Caps Lock aktif. BLUR: formatNameOnBlur() merapikan penuh — kata yang
   // sudah SELESAI diketik semua huruf besar diturunkan (lihat fixWordCasing).
-  ['f_nama','f_mempelai','f_alamat_desa','f_alamat_kec','f_alamat_kab'].forEach(function(id){
+  ['f_nama','f_mempelai','f_alamat_desa','f_alamat_kec','f_alamat_kab','f_alamat_prov'].forEach(function(id){
     var el = document.getElementById(id);
     if(!el) return;
     el.addEventListener('input', function(){
@@ -2722,6 +2727,7 @@
     if(parts.desa) out.push(parts.desa);
     if(parts.kecamatan) out.push('Kec. ' + parts.kecamatan);
     if(parts.kabupaten) out.push('Kab. ' + parts.kabupaten);
+    if(parts.provinsi) out.push('Prov. ' + parts.provinsi);
     return out.join(', ');
   }
 
@@ -3799,7 +3805,7 @@
     var tgl = document.getElementById('f_tanggal');
     if(!tgl.value || !tgl.checkValidity()){ missing.push('Tanggal Acara'); }
     if(!val('f_mulai')){ missing.push('Waktu Mulai Acara'); }
-    if(!val('f_alamat_desa') || !val('f_alamat_kec') || !val('f_alamat_kab')){ missing.push('Alamat Acara'); }
+    if(!val('f_alamat_desa') || !val('f_alamat_kec') || !val('f_alamat_kab') || !val('f_alamat_prov')){ missing.push('Alamat Acara'); }
     if(!document.querySelector('input[name="f_pengambilan"]:checked')){ missing.push('Pengambilan Hasil Cetak'); }
     return missing;
   }
@@ -4057,7 +4063,8 @@
     const alamat = formatAddressParts({
       desa: document.getElementById('f_alamat_desa').value.trim(),
       kecamatan: document.getElementById('f_alamat_kec').value.trim(),
-      kabupaten: document.getElementById('f_alamat_kab').value.trim()
+      kabupaten: document.getElementById('f_alamat_kab').value.trim(),
+      provinsi: document.getElementById('f_alamat_prov').value.trim()
     });
     const maps = document.getElementById('f_maps').value.trim();
     const pengambilanEl = document.querySelector('input[name="f_pengambilan"]:checked');
